@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import Services,Schedule,Specialists,Appointment
+from .models import Service,Schedule,Specialist,Appointment, Salon
 
-admin.site.register(Services)
+admin.site.register(Service)
 admin.site.register(Schedule)
-admin.site.register(Specialists)
+admin.site.register(Specialist)
 admin.site.register(Appointment)
+admin.site.register(Salon)

@@ -1,36 +1,47 @@
 from rest_framework import viewsets, generics, status
+from django.utils.timezone import now
 from rest_framework.response import Response
-from .models import Services, Specialists, Schedule, Appointment
+from .models import Service, Specialist, Schedule, Appointment, Salon
 from .serializers import (
     ServicesSerializer,
     SpecialistsSerializer,
     ScheduleSerializer,
     AppointmentSerializer,
     CreateAppointmentSerializer,
+    SalonSerializer
 )
 
-
+class SalonViewSet(viewsets.ReadOnlyModelViewSet):
+    """ Представление салонов"""
+    queryset = Salon.objects.all()
+    serializer_class = SalonSerializer
 
 class ServicesViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Services.objects.all()
+    queryset = Service.objects.all()
     serializer_class = ServicesSerializer
 
 class AppointmentViewSet(viewsets.ReadOnlyModelViewSet):
+    """ Записи клиентов """
     queryset = Appointment.objects.all()
     serializer_class = AppointmentSerializer
 
 class SpecialistsViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Specialists.objects.all()
+    queryset = Specialist.objects.all()
     serializer_class = SpecialistsSerializer
 
     def get_queryset(self):
         """
-        Если передан ID услуги (service_id), фильтруем специалистов по услуге.
+        Фильтр специалистов по услуге(service_id) и салону(salon_id).
         """
         service_id = self.request.query_params.get('service_id')
+        salon_id = self.request.query_params.get('salon_id')
+        queryset = self.queryset
         if service_id:
-            return self.queryset.filter(services__id=service_id)
-        return self.queryset
+            queryset = queryset.filter(service__id=service_id)
+        if salon_id:
+            queryset = queryset.filter(salon__id=salon_id)
+
+        return queryset
 
 
 
@@ -40,17 +51,22 @@ class ScheduleViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """
-        Если переданы параметры специалиста (specialist_id) и услуги (service_id),
-        фильтруем расписание по этим параметрам.
+        Фильтрует расписание по специалисту (specialist_id), по салону (salon_id), по дате (date)
+        показываем только доступные для записи слоты, если дата уже прошла она не показывается
         """
         specialist_id = self.request.query_params.get('specialist_id')
-        service_id = self.request.query_params.get('service_id')
-        queryset = self.queryset
+        salon_id = self.request.query_params.get('salon_id')
+        date = self.request.query_params.get('date')
+
+
+        queryset = self.queryset.filter(is_available=True,date__gte=now().date())
 
         if specialist_id:
-            queryset = queryset.filter(specialists_id=specialist_id)
-        if service_id:
-            queryset = queryset.filter(services_id=service_id)
+            queryset = queryset.filter(specialist_id=specialist_id)
+        if salon_id:
+            queryset = queryset.filter(salon_id=salon_id)
+        if date:
+            queryset = queryset.filter(date=date)
 
         return queryset
 
@@ -62,13 +78,27 @@ class CreateAppointmentView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         """
-        Переопределяем метод создания записи, чтобы проверить доступность времени.
+        Создаем запись и отмечаем булевое значение, чтобы отметить что запись занята.
         """
         schedule_id = request.data.get('schedule')
-        if not Schedule.objects.filter(id=schedule_id).exists():
+        try:
+            schedule = Schedule.objects.get(id=schedule_id, is_available=True)
+        except Schedule.DoesNotExist:
             return Response(
-                {"error": "Выбранного времени не существует."},
+                {"error": "Выбранного времени не существует или занято."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        schedule.is_available = False
+        schedule.save()
+        super().create(request, *args, **kwargs)
+        successful_register = {
+            'message': 'Успешно записаны!',
+            'Адрес салона' : schedule.salon.address,
+            'Мастер': schedule.specialist.name,
+            'Дата': schedule.date,
+            'Время': schedule.time,
+        }
 
-        return super().create(request, *args, **kwargs)
+        return Response(
+            successful_register,
+            status=status.HTTP_201_CREATED,)

@@ -1,28 +1,34 @@
 from rest_framework import serializers
-from .models import Services, Specialists, Schedule, Appointment
+from .models import Service, Specialist, Schedule, Appointment, Salon
+
+class SalonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Salon
+        fields = ['id', 'address', 'phone']
 
 
 class ServicesSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Services
+        model = Service
         fields = ['id', 'title', 'description', 'price']
 
 
 class SpecialistsSerializer(serializers.ModelSerializer):
-    services = ServicesSerializer(many=True)
+    service = ServicesSerializer(many=True)
+    salon = SalonSerializer(many=True)
 
     class Meta:
-        model = Specialists
-        fields = ['id', 'name', 'services']
+        model = Specialist
+        fields = ['id', 'name', 'salon','service']
 
 
 class ScheduleSerializer(serializers.ModelSerializer):
-    specialists = serializers.StringRelatedField()
-    services = serializers.StringRelatedField()
+    specialist = serializers.StringRelatedField()
+    salon = serializers.StringRelatedField()
 
     class Meta:
         model = Schedule
-        fields = ['id', 'specialists', 'services', 'date', 'time']
+        fields = ['id', 'specialist', 'date', 'time', 'is_available', 'salon']
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
